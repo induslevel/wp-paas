@@ -1,0 +1,31 @@
+services:
+  olivetin:
+    image: jamesread/olivetin:${OLIVETIN_VERSION:-latest}
+    container_name: olivetin
+    restart: unless-stopped
+    privileged: true 
+    user: root
+    
+    environment:
+      - PAAS_ROOT=${PWD}/../..
+      
+    volumes:
+      # 👇 FIX: Mounted to /config/ instead of /etc/OliveTin/
+      - ./:/config/
+      - ${PWD}/../..:${PWD}/../..
+      - /var/run/docker.sock:/var/run/docker.sock
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.olivetin.entrypoints=web"
+      - "traefik.http.routers.olivetin.rule=Host(`${OLIVETIN_DOMAIN}`) || Host(`${ADMIN_IP:-127.0.0.1}`)"
+      - "traefik.http.routers.olivetin.middlewares=olivetin-auth"
+      - "traefik.http.middlewares.olivetin-auth.basicauth.users=${OLIVETIN_AUTH}"
+      - "traefik.http.services.olivetin.loadbalancer.server.port=1337"
+      
+    networks:
+      - frontend
+
+networks:
+  frontend:
+    external: true

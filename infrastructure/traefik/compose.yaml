@@ -1,0 +1,73 @@
+services:
+  traefik:
+    image: traefik:${TRAEFIK_VERSION:-v3.6.12}
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - DOCKER_API_VERSION=${DOCKER_API_VERSION:-1.41} 
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
+      # Save Traefik application logs to a file
+      - "--log.filepath=/var/log/traefik/traefik.log"
+      
+      # Access Log Configuration
+      - "--accesslog=true" 
+      - "--accesslog.format=json"
+      - "--accesslog.fields.headers.names.Host=keep"
+      - "--accesslog.fields.headers.names.X-Forwarded-Proto=keep"
+      # Save Access logs to a file
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      
+      - "--providers.file.filename=/etc/traefik/dynamic.yaml" 
+      
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      
+      - "--entrypoints.web.forwardedHeaders.trustedIPs=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      - "--entrypoints.websecure.forwardedHeaders.trustedIPs=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      
+      - "--entrypoints.web.http.middlewares=cfwarp-global@file"
+      - "--entrypoints.websecure.http.middlewares=cfwarp-global@file"
+      
+      - "--experimental.plugins.cloudflarewarp.modulename=github.com/BetterCorp/cloudflarewarp"
+      - "--experimental.plugins.cloudflarewarp.version=${CF_PLUGIN_VERSION:-v1.3.0}"
+    volumes:
+      - ./dynamic.yaml:/etc/traefik/dynamic.yaml:ro 
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./logs:/var/log/traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.rule=Host(`${DASHBOARD_DOMAIN}`) || Host(`${ADMIN_IP:-127.0.0.1}`)"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${DASHBOARD_AUTH}"
+    networks:
+      - frontend
+
+  # Sidecar container to mirror file logs back to Docker stdout
+  traefik-log-tailer:
+    image: alpine:latest
+    container_name: traefik-log-tailer
+    restart: unless-stopped
+    depends_on:
+      - traefik
+    volumes:
+      # Mounted without :ro so the sidecar can pre-create the empty files
+      - ./logs:/var/log/traefik
+    # Touch ensures files exist, tail reads them immediately
+    command: sh -c "touch /var/log/traefik/access.log /var/log/traefik/traefik.log && tail -f /var/log/traefik/access.log /var/log/traefik/traefik.log"
+    networks:
+      - frontend
+networks:
+  frontend:
+    external: true

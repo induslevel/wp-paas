@@ -1,0 +1,17 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2026.3.0}
+    container_name: cloudflared
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - TUNNEL_TRANSPORT_PROTOCOL=${TUNNEL_PROTOCOL:-quic}
+    command: tunnel --no-autoupdate --loglevel ${TUNNEL_LOG_LEVEL:-info} --metrics 0.0.0.0:${TUNNEL_METRICS_PORT:-2000} run
+    networks:
+      - frontend
+
+networks:
+  frontend:
+    external: true

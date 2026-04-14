@@ -1,0 +1,77 @@
+listenAddressSingleHTTPFrontend: 0.0.0.0:1337
+
+defaultPopupOnStart: execution-dialog
+
+# Define the dynamic JSON entity source
+entities:
+  - name: tenant_domains
+    file: domains.json
+
+actions:
+  # ==========================================
+  # PLATFORM SYNC
+  # ==========================================
+  - title: 0. 🔄 Sync Tenant List
+    icon: "&#128259;"
+    timeout: 600 
+    shell: docker run --rm --privileged --pid=host -v /:/host alpine nsenter -t 1 -m -u -n -i bash -c "echo -n > ${PAAS_ROOT}/infrastructure/olivetin/domains.json && for d in \$(ls ${PAAS_ROOT}/tenants 2>/dev/null); do echo '{\"value\":\"'\$d'\"}' >> ${PAAS_ROOT}/infrastructure/olivetin/domains.json; done"
+
+  # ==========================================
+  # LIFECYCLE MANAGEMENT
+  # ==========================================
+  - title: 🏗️ 1. Scaffold New Site
+    icon: "&#127975;"
+    timeout: 600
+    shell: docker run --rm --privileged --pid=host -v /:/host alpine nsenter -t 1 -m -u -n -i bash -c "mkdir -p ${PAAS_ROOT}/tenants/{{domain}} && cd ${PAAS_ROOT}/tenants/{{domain}} && ${PAAS_ROOT}/scripts/site-setup.sh new {{domain}}"
+    arguments:
+      - name: domain
+        type: 'regex:^[a-zA-Z0-9.-]+$'
+        description: "Enter the full domain (e.g., client.com). Click 'Sync Tenant List' after this finishes!"
+
+  - title: 🚀 Initialize & Start Site
+    icon: "&#128640;"
+    timeout: 600
+    shell: docker run --rm --privileged --pid=host -v /:/host alpine nsenter -t 1 -m -u -n -i bash -c "cd ${PAAS_ROOT}/tenants/{{domain}} && ${PAAS_ROOT}/scripts/site-setup.sh init -y --start"
+    arguments:
+      - name: domain
+        entity: tenant_domains
+        description: "Select the domain to format disks and start Docker"
+        choices:
+          - value: '{{ tenant_domains.value }}'
+            title: '{{ tenant_domains.value }}'
+
+  - title: 🛑 Shutdown Site
+    icon: "&#128680;"
+    timeout: 300
+    shell: docker run --rm --privileged --pid=host -v /:/host alpine nsenter -t 1 -m -u -n -i bash -c "cd ${PAAS_ROOT}/tenants/{{domain}} && ${PAAS_ROOT}/scripts/site-setup.sh down"
+    arguments:
+      - name: domain
+        entity: tenant_domains
+        description: "Select the domain to take offline"
+        choices:
+          - value: '{{ tenant_domains.value }}'
+            title: '{{ tenant_domains.value }}'
+
+  - title: 🛑 Update Disk Quota Site
+    icon: "&#128780;"
+    timeout: 300
+    shell: docker run --rm --privileged --pid=host -v /:/host alpine nsenter -t 1 -m -u -n -i bash -c "cd ${PAAS_ROOT}/tenants/{{domain}} && ${PAAS_ROOT}/scripts/site-setup.sh update"
+    arguments:
+      - name: domain
+        entity: tenant_domains
+        description: "Select the domain to update the disk quota. Make sure site is in shutdown state"
+        choices:
+          - value: '{{ tenant_domains.value }}'
+            title: '{{ tenant_domains.value }}'
+
+  - title: 🔄 Restart Site Containers
+    icon: "&#128260;"
+    timeout: 600
+    shell: cd ${PAAS_ROOT}/tenants/{{domain}} && docker compose restart
+    arguments:
+      - name: domain
+        entity: tenant_domains
+        description: "Select the domain to bounce the containers"
+        choices:
+          - value: '{{ tenant_domains.value }}'
+            title: '{{ tenant_domains.value }}'

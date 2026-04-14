@@ -1,0 +1,14 @@
+# Ignore generated tenant sites
+tenants/*
+!tenants/.keep
+
+# Ignore Docker volumes and virtual disks
+*.img
+*_data_mount/
+
+# NEVER upload credentials!
+.env
+
+# Ignore all logs directories and their contents anywhere in the project
+**/logs/
+*.log
