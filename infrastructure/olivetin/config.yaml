@@ -63,7 +63,17 @@ actions:
         choices:
           - value: '{{ tenant_domains.value }}'
             title: '{{ tenant_domains.value }}'
-
+  - title: 📜 View Site Logs
+    icon: "&#128196;"
+    timeout: 120
+    shell: docker run --rm --privileged --pid=host -v /:/host alpine nsenter -t 1 -m -u -n -i bash -c "cd ${PAAS_ROOT}/tenants/{{domain}} && docker compose logs --tail=200"
+    arguments:
+      - name: domain
+        entity: tenant_domains
+        description: "Select the domain to view the most recent Docker logs"
+        choices:
+          - value: '{{ tenant_domains.value }}'
+            title: '{{ tenant_domains.value }}'
   - title: 🔄 Restart Site Containers
     icon: "&#128260;"
     timeout: 600
