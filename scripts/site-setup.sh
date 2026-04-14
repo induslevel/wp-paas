@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # Dynamically resolve the absolute path to the wp-paas root directory
@@ -178,6 +177,13 @@ services:
       - ./db_data_mount:/var/lib/mysql
     networks:
       - backend
+    # Native MariaDB healthcheck to ensure it's fully ready before other containers start
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 2m
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:${REDIS_VERSION:-7-alpine}
@@ -200,8 +206,10 @@ services:
     security_opt:
       - no-new-privileges:true
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy # Wait for DB healthcheck to pass
+      redis:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -239,9 +247,12 @@ services:
     container_name: ${DOMAIN_SLUG}-setup
     user: "33:33" 
     depends_on:
-      - db
-      - redis
-      - wordpress
+      db:
+        condition: service_healthy # Wait for DB healthcheck to pass
+      redis:
+        condition: service_started
+      wordpress:
+        condition: service_started
     volumes:
       - ./wp_data_mount:/var/www/html
     networks:
@@ -264,8 +275,9 @@ services:
     entrypoint: [ "/bin/sh", "-c" ]
     command:
       - |
-        echo "Waiting 15 seconds for WordPress and Database to initialize..."
-        sleep 15
+        echo "Database reported healthy. Booting setup script..."
+        sleep 5 # Small buffer just in case
+        
         if wp core is-installed; then
           echo "WordPress is already installed. Skipping setup."
         else
